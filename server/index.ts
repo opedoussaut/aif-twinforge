@@ -5,8 +5,8 @@ import { createApp } from './app';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 const app = createApp();
-// The standalone orchestration lab page.
-app.get('/lab', (_req, res) => res.redirect('/lab.html'));
+// The orchestration lab is the app root; keep the old /lab address working.
+app.get('/lab', (_req, res) => res.redirect('/'));
 const production = process.argv.includes('--production');
 if (production) {
   app.use((_req, res, next) => {
@@ -28,6 +28,6 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535)
   throw new Error('PORT must be between 1024 and 65535.');
 app.listen(port, '127.0.0.1', () =>
   process.stderr.write(
-    `NOVA ready at http://127.0.0.1:${port} (${production ? 'production build' : 'development'})\n`,
+    `aif-twinforge ready at http://127.0.0.1:${port} (${production ? 'production build' : 'development'})\n`,
   ),
 );

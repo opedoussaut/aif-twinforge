@@ -1,4 +1,4 @@
-name: Verify NOVA
+name: Verify
 on:
   push:
   pull_request:

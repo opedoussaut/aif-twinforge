@@ -1,120 +1,78 @@
-# NOVA · Engineering workspace
+# aif-twinforge
 
-> **Branch `claude-iterop-orchestrator`:** a simplified, UI-free connector that lets Claude (your own Claude account) drive ITEROP directly. Start here: [docs/iterop/CLAUDE-DIRECT.md](docs/iterop/CLAUDE-DIRECT.md) · `npm run iterop:mcp`. After a rejection, each task carries its run context: [docs/iterop/REWORK-CONTEXT.md](docs/iterop/REWORK-CONTEXT.md).
+**Agent-assisted AI factory digital twin.** Claude, connected through MCP and guided by skills, engineers AI factory configurations, updates the SysML system model and builds the OpenUSD scene. **3DEXPERIENCE ITEROP** governs every step through the cloud API Gateway, and an engineer signs off before anything becomes official.
 
-A natural-language engineering workspace with a governed, read-only **Business Process (ITEROP)** connector, an engineering-item gateway, a semantic MCP server, and an AURA observation lab (deferred).
+This repository puts into practice the loop described in NVIDIA's [Developing an AI Factory Digital Twin with an Agent-Assisted Workflow](https://developer.nvidia.com/blog/developing-an-ai-factory-digital-twin-with-an-agent-assisted-workflow/) (October 2026): requirements → OpenUSD twin → engineering study → reviewed revision. It adds the piece the article leaves to "engineering review": a **governed process** that records each step and keeps the human sign-off.
 
-**Claude project handover:** Read [CLAUDE.md](CLAUDE.md) for implementation ownership and [the full handover](docs/CLAUDE-HANDOVER.md) for the verified baseline, architecture, setup, limitations, and continuation backlog.
+![Claude drives ITEROP through one MCP connector and the API Gateway](docs/screenshots/architecture-direct.png)
 
-![NOVA Business Process workspace — synthetic](docs/screenshots/business-process-1440.png)
+## How it maps to the reference workflow
 
-**NOVA-003 status (ITEROP first):** NOVA can answer which processes you can start, what your current, overdue and next tasks are, and explain a process. These answers run on **synthetic** data, with R2026x-FD04 operation provenance, terminal 401/403 handling and no writes. **The first live read is blocked** on an approved API route and credential. See [CONNECTING-ITEROP.md](docs/CONNECTING-ITEROP.md). Dataset Governance and AURA are postponed.
+| Reference workflow (NVIDIA article)                           | In this repository                                                                                                                                                                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontier model in an agent harness, with skills and MCP       | Claude Desktop / Code with the [`iterop-orchestrator`](.claude/skills/iterop-orchestrator/SKILL.md) skill and the `claude-iterop-orchestrator` MCP connector (`server/iterop-mcp.ts`)             |
+| Requirements linked to system elements in SysML (CATIA Magic) | Guarded CATIA Magic connector with signed model receipts (`server/cameo/`, [SYSTEM-MODEL.md](docs/iterop/SYSTEM-MODEL.md))                                                                        |
+| Editable OpenUSD scene of the hall and equipment              | Cooling configuration → OpenUSD, with a baseline compare viewer (`server/twin/`, `scripts/twin/`, [OPENUSD.md](docs/iterop/OPENUSD.md))                                                           |
+| Design revision handed off for engineering review             | ITEROP process chain with engineer sign-off and rework that carries the full run context ([REWORK-CONTEXT.md](docs/iterop/REWORK-CONTEXT.md))                                                     |
+| Capacity question under a fixed power budget                  | AI-zone scenario: densest-rack check, in-row CDUs ([DEMO-AI-ZONE.md](docs/iterop/DEMO-AI-ZONE.md)) and change against a baseline ([DEMO-CHANGE-SCENARIO.md](docs/iterop/DEMO-CHANGE-SCENARIO.md)) |
 
-**This repository contains a runnable application.** It starts with a synthetic engineering corpus and needs no platform credentials or model subscription. Live platform reads require private configuration and reviewed API contracts for the target release. No real tenant connection or AURA evaluation has been performed by this project.
+## Control
+
+- Claude gets a narrow set of fixed tools, never sees credentials and cannot sign or approve its own work.
+- An independent check verifies each configuration Claude proposes (`server/iterop/proposal-check.ts`).
+- Reviews run **step by step** or **at the end** (`ITEROP_MCP_REVIEW=step|final`); the sign-off always stays with a person in ITEROP.
+- Live mode talks only to a sandbox tenant, admitted by a private contract. Simulated mode makes no network call.
+
+Status: proven live on a sandbox (secure API connection, reading processes, starting a process from a plain-language request); the full chain runs end to end in simulation. Summaries: [executive](docs/iterop/SUMMARY-EXECUTIVE.md) · [technical](docs/iterop/SUMMARY-TECHNICAL.md).
 
 ## Run it
 
-Use Node.js 22.12 or later (Node 24 recommended).
+Node.js 22.12 or later (24 recommended).
 
 ```bash
-git clone https://github.com/opedoussaut/3dx-mcp-gateway.git
-cd 3dx-mcp-gateway
+git clone https://github.com/opedoussaut/aif-twinforge.git
+cd aif-twinforge
 npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:3000**. The workspace opens on **Business Process**. Pick a question under _Ask about_, select an object on the canvas, and ask a follow-up. Each application has its own **Synthetic / Live** selector and its own connection health.
+Open **http://127.0.0.1:3000** for the orchestration lab. Everything runs on the simulated engine until you add a private configuration.
 
-For the optimized application:
+### Connect Claude
+
+- **Direct (recommended):** `npm run iterop:mcp` — see [CLAUDE-DIRECT.md](docs/iterop/CLAUDE-DIRECT.md).
+- **Through the local server:** `npm run mcp` — see [CLAUDE-MCP.md](docs/iterop/CLAUDE-MCP.md).
+- **System model:** `npm run cameo:mcp` — see [SYSTEM-MODEL.md](docs/iterop/SYSTEM-MODEL.md).
+
+### Go live on a sandbox
+
+Copy `.env.example` to `.env` and follow [LAB-ORCHESTRATION.md](docs/iterop/LAB-ORCHESTRATION.md): an API Gateway application (`APIKey`), an Openness Agent, and a reviewed contract from `config/lab-contract.template.json` stored under `.private/`. Never commit `.env` or `.private/`.
+
+### Twin
 
 ```bash
-npm run build
-npm start
+npm run twin:usd    # cooling configuration → OpenUSD
+npm run twin:view   # local viewer with baseline compare
 ```
-
-The server binds to loopback. This is a private, single-operator application; the GitHub repository is the source distribution, not a hosted connection to a corporate tenant. GitHub Pages alone cannot run its private Node backend. Do not publish this runtime to the internet without adding an independently reviewed authentication, authorization and deployment boundary.
-
-## What works
-
-| Area                 | Implemented behavior                                                                                                                                                                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Business Process     | Startable processes (`getAllStartableProcesses`), my tasks with overdue and next views (`getTasksByUser`, self only), process summary (`getBasicProcessInfo`), why a task needs attention, and local start drafts that are never submitted            |
-| Orchestration (lab)  | Natural-language commands that start a synthetic process, read each task form, run illustrative tools and complete tasks. Every write waits for approval; sign-off stays human; a rejection returns as rework. See `docs/iterop/LAB-ORCHESTRATION.md` |
-| Mission control      | Natural-language input, Ask / Investigate / Act modes, five guided missions, session history, evidence inspection, execution traces and JSON export                                                                                                   |
-| Engineering missions | Revision eligibility under the supplied synthetic policy, configured occurrence counting, revision comparison, qualification evidence review and local review drafts                                                                                  |
-| Connection readiness | Server-side configuration checks, release-specific contract validation and a one-read identity check when a reviewed binding is installed                                                                                                             |
-| Read gateway         | Fixed tenant origin, named semantic tools, GET-only private bindings, bounded responses, field projection, explicit coverage, permission-denial stop and no redirects                                                                                 |
-| MCP                  | A stdio server with two local utilities and six synthetic read adapters; live tools are exposed only when their private bindings are admitted                                                                                                         |
-| AURA comparison      | Exact prompt copying, shared synthetic context pack, manual answer/time/citation capture, optional human scores, context declaration and observation export                                                                                           |
-| Intelligence routing | Deterministic routing first; an optional local Ollama classifier for otherwise unrecognized intents, with explicit prompt-egress permission                                                                                                           |
-
-Known missions are solved by ordinary code over retrieved records. This version is not a general-purpose conversational model or a completed multi-agent implementation. The provider interface is designed for extensions; only the optional Ollama adapter is implemented, and a real model inference run has not been validated here.
-
-## Connect your platform
-
-**Business Process (ITEROP):** see [CONNECTING-ITEROP.md](docs/CONNECTING-ITEROP.md). It has its own `NOVA_ITEROP_*` configuration and reviewed contract.
-
-**Engineering items:**
-
-Follow [the private connection guide](docs/CONNECTING.md). Configure the origin, release, security context, authentication and a reviewed binding file on your machine. The interface deliberately does not collect credentials.
-
-No 3DEXPERIENCE endpoint is assumed to be supported based on a public example alone. The checked-in registry retains the blueprint's research classifications: **18 platform-backed candidates are pending contract verification**, while two NOVA utilities are local. A private operator-reviewed binding does not change the published research baseline.
-
-The initial live adapter accepts reviewed **GET** reads only. Session/CAS login, token refresh, POST-based reads, pagination traversal, live eligibility policies, process launch and task completion are not implemented. A documented operation requiring one of these features needs an adapter change and corresponding validation. Incomplete or unknown search coverage remains explicit.
-
-## Compare with AURA
-
-1. Open **AURA comparison** and select a mission.
-2. For a synthetic comparison, download the context pack and make the same facts accessible in AURA. The pack has source facts and review policy, but no scoring assertions.
-3. Run NOVA, copy the exact prompt, and run it in your AURA environment.
-4. Record the visible AURA response, release, competency, optional time and references. Confirm matching context only if that is actually true.
-5. Save and export the observation. Unobservable AURA token counts, internal calls and costs remain `null` / `NOT_OBSERVABLE`.
-
-The lab does not automate AURA or assert that NOVA outperforms it. NOVA server runtime and manually observed AURA interaction time have different timing boundaries. A single observation is not a benchmark conclusion; use the [benchmark protocol](docs/blueprint/benchmarks/scoring/PROTOCOL.md) for repeated, controlled assessment.
-
-Mission history and observations are held in process memory, partitioned by an HTTP-only session cookie. They expire after eight hours of inactivity or disappear on restart. Export the records you want to retain. Exported live evidence may be confidential; keep those exports in your private workspace.
-
-## MCP client configuration
-
-The same semantic gateway is available to a local MCP client. Use an **absolute** Node executable and repository path in your client's configuration, and set its working directory to this repository:
-
-```json
-{
-  "mcpServers": {
-    "nova": {
-      "command": "/absolute/path/to/node",
-      "args": ["--import", "tsx", "/absolute/path/to/3dx-mcp-gateway/server/mcp.ts"],
-      "cwd": "/absolute/path/to/3dx-mcp-gateway",
-      "env": { "NOVA_MCP_SOURCE": "synthetic" }
-    }
-  }
-}
-```
-
-Client configuration formats differ; adapt this stdio example to your client. Use `npm run mcp` for a terminal launch. Only protocol data is written to stdout. Set `NOVA_MCP_SOURCE=live` in the private runtime only after the connection guide is complete. Any MCP host receiving live evidence must itself be authorized for that data; the host controls its subsequent model egress.
 
 ## Verify
 
 ```bash
-npm run check
-npx playwright install chromium
-npm run test:e2e
+npm run check       # typecheck, unit tests, production build
+npm run test:e2e    # browser tests (Playwright)
 ```
-
-Tests cover synthetic mission outcomes, missing/ambiguous evidence, untrusted source text, contract admission, field grooming, origin and session controls, permission denials, actual MCP stdio exchange, browser workflows and accessibility. HTTP and model behavior are mocked where marked; these tests do not prove compatibility with a real 3DEXPERIENCE tenant or model installation.
 
 ## Structure
 
-```text
-src/                 React interface
-server/              Local HTTP runtime, semantic gateway, mission runner, MCP server
-server/iterop/       ITEROP operation inventory, contract, connector and NL router
-shared/              Typed mission and observation contracts; benchmark prompts
-config/              Deliberately blocked private-contract templates (engineering, ITEROP)
-tests/               Runtime, HTTP, MCP and browser tests
-docs/CONNECTING.md   Private runtime setup and limitations
-docs/blueprint/      Technical blueprint, registry, schemas and synthetic fixtures
-docs/decisions/      Architecture decision records
+```
+server/iterop/      ITEROP connector, process chain, orchestrator, proposal check, live API Gateway engine
+server/iterop-mcp.ts  claude-iterop-orchestrator MCP connector (stdio)
+server/cameo/       guarded CATIA Magic connector and signed model receipts
+server/twin/        OpenUSD generation for the cooling configuration
+src/                orchestration lab (React)
+scripts/            OpenAPI resolver, twin tools, demo recording
+docs/iterop/        architecture, setup, scenarios and summaries
+.claude/skills/     iterop-orchestrator and nova-iterop skills
 ```
 
-The blueprint is an architecture target. This v0.2 implementation is the first executable read-only slice; see [implementation scope](docs/IMPLEMENTATION.md) for the exact boundary. Corporate attachments, tenant exports and credentials are excluded from this public repository.
+History: extracted on 3 November 2026 from [`3dx-mcp-gateway`](https://github.com/opedoussaut/3dx-mcp-gateway) (branch `claude-iterop-orchestrator`), keeping the commits that touched this scope.
