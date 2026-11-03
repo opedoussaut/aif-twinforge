@@ -1,0 +1,10 @@
+{
+  "endPoint": "minio.example.com",
+  "port": 443,
+  "useSSL": true,
+  "accessKey": "",
+  "secretKey": "",
+  "bucket": "widgets",
+  "prefix": "aif-twinforge-widget",
+  "publicUrl": "https://minio.example.com/widgets"
+}

@@ -44,6 +44,10 @@ Open **http://127.0.0.1:3000** for the orchestration lab. Everything runs on the
 - **Through the local server:** `npm run mcp` — see [CLAUDE-MCP.md](docs/iterop/CLAUDE-MCP.md).
 - **System model:** `npm run cameo:mcp` — see [SYSTEM-MODEL.md](docs/iterop/SYSTEM-MODEL.md).
 
+### Any model, in the 3DDashboard
+
+`npm run agent` runs the same connectors for any model behind an OpenAI-compatible endpoint (LiteLLM, Ollama…), and `widget/` is a 3DDashboard widget to chat with it: model selector, and approval before every change. Only models certified for the full chain may write. See [WIDGET.md](docs/WIDGET.md).
+
 ### Go live on a sandbox
 
 Copy `.env.example` to `.env` and follow [LAB-ORCHESTRATION.md](docs/iterop/LAB-ORCHESTRATION.md): an API Gateway application (`APIKey`), an Openness Agent, and a reviewed contract from `config/lab-contract.template.json` stored under `.private/`. Never commit `.env` or `.private/`.
@@ -69,6 +73,8 @@ server/iterop/      ITEROP connector, process chain, orchestrator, proposal chec
 server/iterop-mcp.ts  claude-iterop-orchestrator MCP connector (stdio)
 server/cameo/       guarded CATIA Magic connector and signed model receipts
 server/twin/        OpenUSD generation for the cooling configuration
+server/agent/       model-agnostic agent (AI SDK) for the widget, with the approval policy
+widget/             3DDashboard widget (Vue): model selector, chat, approvals
 src/                orchestration lab (React)
 scripts/            OpenAPI resolver, twin tools, demo recording
 docs/iterop/        architecture, setup, scenarios and summaries
