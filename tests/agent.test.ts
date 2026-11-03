@@ -2,9 +2,9 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { simulateReadableStream } from 'ai';
+import { APICallError, simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
-import { createAgentApp } from '../server/agent/app';
+import { createAgentApp, errorMessage } from '../server/agent/app';
 import { loadAgentConfig, type AgentConfig } from '../server/agent/config';
 import { Connectors, type ConnectedTool } from '../server/agent/connectors';
 import { approvalFor } from '../server/agent/policy';
@@ -185,4 +185,34 @@ test('browser calls need an allowed widget origin; models list is labelled', asy
   } finally {
     s.close();
   }
+});
+
+test('a failing model shows its reason instead of "An error occurred"', async () => {
+  const failing = new MockLanguageModelV4({
+    doStream: async () => {
+      throw new APICallError({
+        message: 'model failed to load, this may be due to resource limitations',
+        url: 'http://127.0.0.1:11434/v1/chat/completions',
+        requestBodyValues: {},
+        statusCode: 500,
+        isRetryable: false,
+      });
+    },
+  });
+  const s = await serve(failing as unknown as ReturnType<typeof scripted>);
+  try {
+    const chunks = await chat(s.url, 'local/llama', 'Hello');
+    const error = chunks.find((c) => c.type === 'error');
+    assert.match(String(error?.errorText), /model endpoint failed \(500\): model failed to load/);
+  } finally {
+    s.close();
+  }
+  assert.equal(
+    errorMessage(new Error('rejected: Bearer sk-abc123 is invalid')),
+    'The agent failed: rejected: Bearer … is invalid',
+  );
+  assert.equal(
+    errorMessage(new Error('bad sk-proj-9x_Y and api_key=abc123')),
+    'The agent failed: bad sk-… and api_key=…',
+  );
 });
