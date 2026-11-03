@@ -354,14 +354,38 @@ export class CameoGuard {
     sourceId: string;
     targetId: string;
     name?: string;
+    ownerId?: string;
+    sourcePartWithPortId?: string;
+    targetPartWithPortId?: string;
   }) {
-    await this.requireInside(b.sourceId);
-    await this.requireInside(b.targetId);
+    const connector = b.type === 'Connector';
+    if (connector && !b.ownerId)
+      throw new CameoError(
+        400,
+        'A connector needs ownerId: the block whose internal structure it wires (the IBD owner).',
+      );
+    if (!connector && (b.ownerId || b.sourcePartWithPortId || b.targetPartWithPortId))
+      throw new CameoError(400, 'ownerId and the partWithPort ids apply to connectors only.');
+    for (const x of [
+      b.sourceId,
+      b.targetId,
+      b.ownerId,
+      b.sourcePartWithPortId,
+      b.targetPartWithPortId,
+    ])
+      if (x) await this.requireInside(x);
     const r = await this.http.call('POST', '/relationships', {
       type: b.type,
       sourceId: b.sourceId,
       targetId: b.targetId,
       ...(b.name ? { name: b.name } : {}),
+      ...(connector
+        ? {
+            ownerId: b.ownerId,
+            ...(b.sourcePartWithPortId ? { sourcePartWithPortId: b.sourcePartWithPortId } : {}),
+            ...(b.targetPartWithPortId ? { targetPartWithPortId: b.targetPartWithPortId } : {}),
+          }
+        : {}),
     });
     return { created: (r.relationship ?? r) as Element };
   }
@@ -588,12 +612,15 @@ export function registerCameoTools(server: McpServer, guard: CameoGuard, blocker
   server.registerTool(
     'cameo_create_relationship',
     {
-      description: `${note} WRITE — relate two elements of the lab package (for example Satisfy from a block to a requirement, or Composition for a part).`,
+      description: `${note} WRITE — relate two elements of the lab package (for example Satisfy from a block to a requirement, or Composition for a part). For an IBD Connector: sourceId/targetId are the ports (or parts) to wire, ownerId is the block that owns the IBD, and sourcePartWithPortId/targetPartWithPortId are the parts through which each port is reached (needed when several parts share a block's ports).`,
       inputSchema: {
         type: z.enum(RELATIONSHIP_TYPES),
         sourceId: elementId,
         targetId: elementId,
         name: name.optional(),
+        ownerId: elementId.optional(),
+        sourcePartWithPortId: elementId.optional(),
+        targetPartWithPortId: elementId.optional(),
       },
       annotations: add,
     },

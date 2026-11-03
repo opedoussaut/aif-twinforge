@@ -236,6 +236,53 @@ test('reads and writes stay inside the lab package', async () => {
   assert.ok(fake.writes().every((w) => !/macro|session|teamwork/.test(w.path)));
 });
 
+test('IBD connectors carry their owner and part-with-port, all inside the lab package', async () => {
+  const fake = plugin();
+  const { call } = await connect(fake);
+  const mk = async (type: string, name: string, parentId: string) =>
+    (await call('cameo_create_element', { type, name, parentId })).created.id as string;
+  const sys = await mk('Block', 'Cooling System', 'lab');
+  const cdu = await mk('Block', 'CDU', 'lab');
+  const out = await mk('Port', 'supplyOut', cdu);
+  const loop = await mk('Block', 'Loop', 'lab');
+  const inp = await mk('Port', 'fromCdu', loop);
+  const cduPart = await mk('Property', 'aiCdu', sys);
+  const loopPart = await mk('Property', 'aiLoop', sys);
+  const wire = { type: 'Connector', sourceId: out, targetId: inp };
+
+  const noOwner = await call('cameo_create_relationship', wire);
+  assert.equal(noOwner.isError, true);
+  assert.match(noOwner.error, /ownerId/);
+  const outsideOwner = await call('cameo_create_relationship', { ...wire, ownerId: 'secret' });
+  assert.equal(outsideOwner.isError, true);
+  const notConnector = await call('cameo_create_relationship', {
+    type: 'Satisfy',
+    sourceId: sys,
+    targetId: cdu,
+    ownerId: sys,
+  });
+  assert.equal(notConnector.isError, true);
+  const before = fake.writes().filter((w) => w.path === '/relationships').length;
+  assert.equal(before, 0);
+
+  const ok = await call('cameo_create_relationship', {
+    ...wire,
+    ownerId: sys,
+    sourcePartWithPortId: cduPart,
+    targetPartWithPortId: loopPart,
+  });
+  assert.equal(ok.isError, undefined, JSON.stringify(ok));
+  const sent = fake.writes().find((w) => w.path === '/relationships')!.body;
+  assert.deepEqual(sent, {
+    type: 'Connector',
+    sourceId: out,
+    targetId: inp,
+    ownerId: sys,
+    sourcePartWithPortId: cduPart,
+    targetPartWithPortId: loopPart,
+  });
+});
+
 test('"Update system model" in ITEROP accepts only a signed receipt from the guard', async () => {
   const { call } = await connect();
   const sys = await call('cameo_create_element', {
