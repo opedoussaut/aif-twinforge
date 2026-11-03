@@ -1,0 +1,23 @@
+{
+  "name": "aif-twinforge-widget",
+  "version": "0.1.0",
+  "description": "3DDashboard widget: chat with any model that drives the aif-twinforge connectors, with approval before every change",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "deploy": "node scripts/deploy-minio.mjs",
+    "deploy:watch": "node scripts/deploy-minio.mjs --watch"
+  },
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/vue": "4.0.162",
+    "ai": "7.0.162",
+    "vue": "3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.8",
+    "minio": "8.0.7",
+    "vite": "8.3.2"
+  },
+  "private": true
+}
