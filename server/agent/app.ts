@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import {
+  APICallError,
   createAgentUIStream,
   pipeUIMessageStreamToResponse,
   stepCountIs,
@@ -32,6 +33,21 @@ export function agentInstructions() {
     '',
     body,
   ].join('\n');
+}
+
+/**
+ * What went wrong, for the widget and the agent's log, instead of the SDK's bare "An error
+ * occurred.". Model endpoint failures keep their status; anything that looks like a key is masked.
+ */
+export function errorMessage(e: unknown) {
+  const status = APICallError.isInstance(e) && e.statusCode ? ` (${e.statusCode})` : '';
+  const text = e instanceof Error ? e.message : String(e);
+  const where = APICallError.isInstance(e) ? 'The model endpoint failed' : 'The agent failed';
+  return `${where}${status}: ${text}`
+    .replace(/\bBearer\s+\S+/gi, 'Bearer …')
+    .replace(/\bsk-[\w-]+/g, 'sk-…')
+    .replace(/(api[_-]?key\s*[=:]\s*)\S+/gi, '$1…')
+    .slice(0, 500);
 }
 
 const chatBody = z.object({
@@ -149,6 +165,11 @@ export function createAgentApp(opts: {
         agent,
         uiMessages: messages,
         abortSignal: abort.signal,
+        onError: (e) => {
+          const message = errorMessage(e);
+          process.stderr.write(`agent: ${model}: ${message}\n`);
+          return message;
+        },
       }),
     });
   });
