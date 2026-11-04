@@ -37,6 +37,16 @@ The prompt is the [iterop-orchestrator skill](../.claude/skills/iterop-orchestra
 
 ## Put it in the 3DDashboard
 
+### On Vercel (HTTPS, no server to run)
+
+1. On vercel.com, import `opedoussaut/aif-twinforge` and choose **Import single project** on `widget` (not the root app). Root Directory `widget`; the rest comes from `widget/vercel.json`.
+2. Every push to `main` redeploys. The widget URL is `https://<project>.vercel.app/index.html`.
+3. Add that origin and the dashboard's origin to `AGENT_ALLOWED_ORIGINS`, restart the agent, and add the widget in the 3DDashboard by its URL.
+
+The deployed files hold no secrets: model keys and ITEROP credentials stay with the agent on your machine. Some tenants accept widgets only from approved domains.
+
+### On MinIO
+
 1. `cd widget`, copy `minio.config.example.json` to `minio.config.json` (git-ignored) and fill it in.
 2. `npm run deploy` (or `npm run deploy:watch` to rebuild and upload on every change). It prints the widget URL.
 3. In the 3DDashboard, add the widget by that URL.
