@@ -1,5 +1,5 @@
 {
-  "name": "aif-twinforge-widget",
+  "name": "aif-twinforge",
   "version": "0.1.0",
   "description": "3DDashboard widget: chat with any model that drives the aif-twinforge connectors, with approval before every change",
   "scripts": {
