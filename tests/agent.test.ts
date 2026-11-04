@@ -149,6 +149,50 @@ test('a certified model asks the user before any write', async () => {
   }
 });
 
+test('after an approved write, the next write asks the user again', async () => {
+  const s = await serve(scripted('view3d_build', { runReference: 'cooling 1' }), {
+    fullChainModels: ['claude'],
+  });
+  try {
+    const r = await fetch(`${s.url}/agent/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude',
+        messages: [
+          ...user('Start the cooling chain.'),
+          {
+            id: 'a1',
+            role: 'assistant',
+            parts: [
+              { type: 'step-start' },
+              {
+                type: 'dynamic-tool',
+                toolName: 'iterop_start_process',
+                toolCallId: 'call-0',
+                state: 'approval-responded',
+                input: { processKey: 'x', values: {} },
+                approval: { id: 'ap-0', approved: true },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const chunks = (await r.text())
+      .split('\n')
+      .filter((l) => l.startsWith('data: {'))
+      .map((l) => JSON.parse(l.slice(6)) as { type: string; toolCallId?: string });
+    // The approved call ran (and the connector refused its made-up process)...
+    assert.ok(chunks.some((c) => c.type === 'tool-output-available' && c.toolCallId === 'call-0'));
+    // ...and the model's next write waits for the user, even with invalid input.
+    assert.ok(chunks.some((c) => c.type === 'tool-approval-request' && c.toolCallId === 'call-1'));
+    assert.ok(!chunks.some((c) => c.type.startsWith('tool-output') && c.toolCallId === 'call-1'));
+  } finally {
+    s.close();
+  }
+});
+
 test('browser calls need an allowed widget origin; models list is labelled', async () => {
   const s = await serve(scripted('iterop_connection', {}), {
     allowedOrigins: ['https://tenant.example.com'],
