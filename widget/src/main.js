@@ -8,7 +8,7 @@ onLoad(() => {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
-  widget.setTitle('AI factory agent');
+  widget.setTitle('aif-twinforge');
   registerPreferences();
   createApp(App).mount('#app');
 });

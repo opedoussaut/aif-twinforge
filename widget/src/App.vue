@@ -73,6 +73,12 @@ function send() {
 }
 
 const json = (v) => JSON.stringify(v, null, 2);
+// The agent runs a call and the connector refuses it (bad input, wrong stage): not "done".
+const failed = (part) => part.state === 'output-error' || part.output?.error === true;
+const reason = (part) => {
+  const r = part.output?.result;
+  return part.errorText ?? (typeof r === 'string' ? r : (r?.error ?? r?.message ?? ''));
+};
 const answer = (part, approved) =>
   addToolApprovalResponse({
     id: part.approval.id,
@@ -85,7 +91,7 @@ const answer = (part, approved) =>
   <div ref="surface" class="agent">
     <header class="bar">
       <div class="title">
-        <strong>AI factory agent</strong>
+        <strong>aif-twinforge</strong>
         <span :class="['dot', agent.state]" :title="agent.text"></span>
       </div>
       <label class="model">
@@ -114,20 +120,27 @@ const answer = (part, approved) =>
         <template v-for="(part, i) in m.parts" :key="i">
           <p v-if="part.type === 'text'" class="text">{{ part.text }}</p>
 
-          <section v-else-if="part.type === 'dynamic-tool'" :class="['tool', part.state]">
+          <section
+            v-else-if="part.type === 'dynamic-tool'"
+            :class="['tool', part.state, { failed: failed(part) }]"
+          >
             <div class="tool-head">
               <code>{{ part.toolName }}</code>
               <span class="state">
                 {{
-                  {
-                    'input-streaming': 'preparing',
-                    'input-available': 'running',
-                    'approval-requested': 'waiting for you',
-                    'approval-responded': part.approval?.approved ? 'approved' : 'declined',
-                    'output-available': 'done',
-                    'output-error': 'error',
-                    'output-denied': 'refused',
-                  }[part.state] ?? part.state
+                  failed(part)
+                    ? 'failed'
+                    : ({
+                        'input-streaming': 'preparing',
+                        'input-available': 'running',
+                        'approval-requested': 'waiting for you',
+                        'approval-responded': part.approval?.approved ? 'approved' : 'declined',
+                        'output-available': part.approval?.approved
+                          ? 'done · approved by you'
+                          : 'done',
+                        'output-error': 'error',
+                        'output-denied': 'refused',
+                      }[part.state] ?? part.state)
                 }}
               </span>
             </div>
@@ -143,8 +156,11 @@ const answer = (part, approved) =>
             <p v-else-if="part.state === 'output-denied'" class="denied">
               {{ part.approval?.reason ?? 'Refused.' }}
             </p>
-            <details v-else-if="part.state === 'output-available' || part.state === 'output-error'">
-              <summary>Details</summary>
+            <details
+              v-else-if="part.state === 'output-available' || part.state === 'output-error'"
+              :open="failed(part)"
+            >
+              <summary>{{ failed(part) ? reason(part) || 'Details' : 'Details' }}</summary>
               <pre>{{ json({ input: part.input, output: part.output ?? part.errorText }) }}</pre>
             </details>
           </section>

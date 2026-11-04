@@ -144,7 +144,8 @@ button:disabled {
   border-color: var(--amber);
   background: var(--amber-soft);
 }
-.tool.output-denied {
+.tool.output-denied,
+.tool.failed {
   border-color: var(--red);
   background: var(--red-soft);
 }
