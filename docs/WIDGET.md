@@ -28,12 +28,27 @@ A 3DDashboard widget where engineers chat with **any model** that drives the aif
 
 The prompt is the [iterop-orchestrator skill](../.claude/skills/iterop-orchestrator/SKILL.md), so every model follows the same rules as Claude.
 
-## Run it locally
+## Each user runs their own agent
 
-1. A model endpoint. With Ollama: `ollama serve`, then `AGENT_MODEL_BASE_URL=http://127.0.0.1:11434/v1`. With LiteLLM: `litellm --config litellm.yaml` (port 4000, the default).
-2. Settings in `.env` (see `.env.example`, section _Agent for the 3DDashboard widget_).
-3. The agent: `npm run agent` → `http://127.0.0.1:3100`.
-4. The widget, standalone: `cd widget && npm install && npm start` → <http://localhost:8081>. Allow that origin in `AGENT_ALLOWED_ORIGINS`.
+There is no shared server. Each person runs the agent on their own computer with their own model, so keys and prompts stay on their machine. The widget walks them through it:
+
+1. **No agent found:** the widget shows _Run your own agent_. It needs Node.js 22 and Git once, then one command, kept open while the widget is used:
+
+   ```bash
+   npx github:opedoussaut/aif-twinforge
+   ```
+
+2. **Agent found:** the widget connects by itself. With Ollama running on its default port, the models show up with no settings at all.
+3. **Other models:** _Model source_ (the gear) offers Ollama, OpenRouter, OpenAI or any OpenAI-compatible endpoint (LiteLLM, a company gateway). The agent keeps the choice in `~/.aif-twinforge/settings.json`. The key goes only to the endpoint it was entered for: changing the URL without a new key drops the saved one, and the widget never gets a key back.
+
+Defaults that need no `.env`: models from Ollama (`http://127.0.0.1:11434/v1`), and browser calls accepted from the published widget, any `https://*.3dexperience.3ds.com` dashboard and the dev server (`http://localhost:8081`). A `.env` still overrides them (see `.env.example`).
+
+Only models listed in `AGENT_FULL_CHAIN_MODELS` may ask for changes; every other model reads only. That list is empty by default, until a model passes the Hall B benchmark.
+
+### Developing the widget
+
+1. `npm run agent` from the repository (uses `.env` if present) → `http://127.0.0.1:3100`.
+2. `cd widget && npm install && npm start` → <http://localhost:8081>. Outside the dashboard, `?agent=http://127.0.0.1:3199` points the page at another local agent.
 
 ## Put it in the 3DDashboard
 

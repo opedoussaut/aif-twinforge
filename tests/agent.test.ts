@@ -5,7 +5,13 @@ import type { Server } from 'node:http';
 import { APICallError, simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { createAgentApp, errorMessage } from '../server/agent/app';
-import { loadAgentConfig, type AgentConfig } from '../server/agent/config';
+import {
+  checkModelUrl,
+  loadAgentConfig,
+  originAllowed,
+  type AgentConfig,
+} from '../server/agent/config';
+import { memorySettingsStore } from '../server/agent/settings';
 import { Connectors, type ConnectedTool } from '../server/agent/connectors';
 import { approvalFor } from '../server/agent/policy';
 
@@ -43,20 +49,39 @@ const user = (text: string) => [{ id: 'u1', role: 'user', parts: [{ type: 'text'
 
 test('agent config: defaults, origin rules and optional CATIA connector', () => {
   const c = loadAgentConfig({});
-  assert.equal(c.modelBaseUrl, 'http://127.0.0.1:4000/v1');
+  assert.equal(c.modelBaseUrl, 'http://127.0.0.1:11434/v1');
+  assert.equal(c.modelSource, 'default');
   assert.equal(c.port, 3100);
   assert.deepEqual(c.blockers, []);
+  assert.ok(originAllowed('https://r1-eu1-ifwe.3dexperience.3ds.com', c.allowedOrigins));
+  assert.ok(originAllowed('https://aif-twinforge.vercel.app', c.allowedOrigins));
+  assert.ok(!originAllowed('https://3dexperience.3ds.com.evil.example', c.allowedOrigins));
+  assert.ok(!originAllowed('http://r1.3dexperience.3ds.com', c.allowedOrigins));
+  assert.ok(!originAllowed('https://evil-3dexperience.3ds.com', c.allowedOrigins));
+  const saved = loadAgentConfig(
+    { AGENT_MODEL_BASE_URL: 'http://127.0.0.1:4000/v1', AGENT_MODEL_API_KEY: 'env-key' },
+    { modelBaseUrl: 'https://openrouter.ai/api/v1', modelApiKey: 'mine' },
+  );
+  assert.equal(saved.modelSource, 'saved');
+  assert.equal(saved.modelBaseUrl, 'https://openrouter.ai/api/v1');
+  assert.equal(saved.modelApiKey, 'mine');
+  assert.ok('error' in checkModelUrl('http://models.example.com/v1'));
+  assert.ok('url' in checkModelUrl('http://localhost:4000/v1/'));
   assert.deepEqual(
     c.connectors.map((s) => s.name),
     ['iterop'],
   );
   const d = loadAgentConfig({
     AGENT_ALLOWED_ORIGINS:
-      'https://tenant.example.com, http://evil.example.com, http://localhost:8081',
+      'https://tenant.example.com, http://evil.example.com, http://localhost:8081, https://*.example.org',
     AGENT_FULL_CHAIN_MODELS: 'claude, gpt',
     AGENT_CAMEO: 'on',
   });
-  assert.deepEqual(d.allowedOrigins, ['https://tenant.example.com', 'http://localhost:8081']);
+  assert.deepEqual(d.allowedOrigins, [
+    'https://tenant.example.com',
+    'http://localhost:8081',
+    'https://*.example.org',
+  ]);
   assert.equal(d.blockers.length, 1);
   assert.deepEqual(d.fullChainModels, ['claude', 'gpt']);
   assert.deepEqual(
@@ -83,13 +108,18 @@ before(async () => {
 });
 after(() => connectors.close());
 
-const serve = async (model: ReturnType<typeof scripted>, over: Partial<AgentConfig> = {}) => {
+const serve = async (
+  model: ReturnType<typeof scripted>,
+  over: Partial<AgentConfig> = {},
+  fetchImpl: typeof fetch = models,
+) => {
   const config = { ...loadAgentConfig({}), ...over };
-  const app = createAgentApp({ config, connectors, fetchImpl: models, modelFor: () => model });
+  const settings = memorySettingsStore();
+  const app = createAgentApp({ config, connectors, fetchImpl, modelFor: () => model, settings });
   const server: Server = app.listen(0, '127.0.0.1');
   await new Promise<void>((r) => server.once('listening', r));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { url, close: () => server.close() };
+  return { url, settings, close: () => server.close() };
 };
 const chat = async (url: string, model: string, text: string) => {
   const r = await fetch(`${url}/agent/chat`, {
@@ -226,6 +256,50 @@ test('browser calls need an allowed widget origin; models list is labelled', asy
       body: JSON.stringify({ model: 'nope', messages: user('hi') }),
     });
     assert.equal(unknown.status, 400);
+  } finally {
+    s.close();
+  }
+});
+
+test('model settings from the widget: saved, key never returned, never sent to a new URL', async () => {
+  const calls: { url: string; auth: string | null }[] = [];
+  const recording = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, auth: new Headers(init?.headers).get('authorization') });
+    return models();
+  }) as typeof fetch;
+  const s = await serve(scripted('iterop_connection', {}), {}, recording);
+  const put = (body: unknown) =>
+    fetch(`${s.url}/agent/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', origin: 'https://aif-twinforge.vercel.app' },
+      body: JSON.stringify(body),
+    });
+  try {
+    const first = await (
+      await put({ modelBaseUrl: 'https://openrouter.ai/api/v1', modelApiKey: 'sk-mine' })
+    ).json();
+    assert.deepEqual(first.settings, {
+      modelBaseUrl: 'https://openrouter.ai/api/v1',
+      hasKey: true,
+      source: 'saved',
+    });
+    assert.equal(first.models.length, 2);
+    assert.equal(calls.at(-1)?.auth, 'Bearer sk-mine');
+    assert.deepEqual(s.settings.load(), {
+      modelBaseUrl: 'https://openrouter.ai/api/v1',
+      modelApiKey: 'sk-mine',
+    });
+    const view = await (await fetch(`${s.url}/agent/settings`)).text();
+    assert.ok(!view.includes('sk-mine'));
+    // Same URL without a key keeps it; another URL without a key drops it.
+    await put({ modelBaseUrl: 'https://openrouter.ai/api/v1' });
+    assert.equal(calls.at(-1)?.auth, 'Bearer sk-mine');
+    const moved = await (await put({ modelBaseUrl: 'https://models.example.com/v1' })).json();
+    assert.equal(moved.settings.hasKey, false);
+    assert.equal(calls.at(-1)?.auth, null);
+    const refused = await put({ modelBaseUrl: 'http://models.example.com/v1' });
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).message, /https/);
   } finally {
     s.close();
   }

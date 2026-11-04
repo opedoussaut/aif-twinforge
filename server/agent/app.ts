@@ -11,9 +11,10 @@ import {
 } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import type { AgentConfig } from './config';
+import { checkModelUrl, originAllowed, type AgentConfig, type ModelSettings } from './config';
 import type { Connectors } from './connectors';
 import { approvalFor } from './policy';
+import { memorySettingsStore, type SettingsStore } from './settings';
 
 export type AgentModel = { id: string; fullChain: boolean };
 
@@ -50,6 +51,12 @@ export function errorMessage(e: unknown) {
     .slice(0, 500);
 }
 
+const settingsBody = z.object({
+  modelBaseUrl: z.string().min(1).max(500),
+  /** A new key. Left out: keep the saved key if the URL is unchanged, else none. */
+  modelApiKey: z.string().max(500).optional(),
+});
+
 const chatBody = z.object({
   model: z.string().min(1).max(200),
   messages: z.array(z.unknown()).max(400),
@@ -60,20 +67,32 @@ export function createAgentApp(opts: {
   connectors: Connectors;
   fetchImpl?: typeof fetch;
   modelFor?: (id: string) => LanguageModel;
+  /** Where model settings entered in the widget are saved. Default: this process only. */
+  settings?: SettingsStore;
 }) {
   const { config, connectors } = opts;
   const fetchImpl = opts.fetchImpl ?? fetch;
-  const provider = createOpenAICompatible({
-    name: 'models',
-    baseURL: config.modelBaseUrl,
-    apiKey: config.modelApiKey,
-  });
-  const modelFor = opts.modelFor ?? ((id: string) => provider.chatModel(id));
+  const store = opts.settings ?? memorySettingsStore();
+  // The model endpoint can change while the agent runs, when the user saves new settings.
+  let model: ModelSettings = { modelBaseUrl: config.modelBaseUrl, modelApiKey: config.modelApiKey };
+  let modelSource = config.modelSource;
+  const blockers = () => [
+    ...config.blockers.filter((b) => !b.startsWith('The model URL')),
+    ...(model.modelBaseUrl ? [] : config.blockers.filter((b) => b.startsWith('The model URL'))),
+  ];
+  const modelFor =
+    opts.modelFor ??
+    ((id: string) =>
+      createOpenAICompatible({
+        name: 'models',
+        baseURL: model.modelBaseUrl,
+        apiKey: model.modelApiKey,
+      }).chatModel(id));
   const instructions = agentInstructions();
 
   const listModels = async (): Promise<AgentModel[]> => {
-    const r = await fetchImpl(`${config.modelBaseUrl}/models`, {
-      headers: config.modelApiKey ? { Authorization: `Bearer ${config.modelApiKey}` } : {},
+    const r = await fetchImpl(`${model.modelBaseUrl}/models`, {
+      headers: model.modelApiKey ? { Authorization: `Bearer ${model.modelApiKey}` } : {},
       redirect: 'error',
       signal: AbortSignal.timeout(5000),
     });
@@ -96,17 +115,19 @@ export function createAgentApp(opts: {
     // (curl, tests) are local by the host check above.
     const origin = req.headers.origin;
     if (origin) {
-      if (!config.allowedOrigins.includes(origin))
-        return res.status(403).json({ error: 'ORIGIN_REJECTED' });
+      // A refused page may read the refusal, so the widget can say why instead of "offline".
+      const allowed = originAllowed(origin, config.allowedOrigins);
       res.set({
         'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'GET, POST',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT',
         'Access-Control-Allow-Headers': 'Content-Type',
         Vary: 'Origin',
       });
       // Chrome asks before a public page reaches a local server (Private Network Access).
       if (req.headers['access-control-request-private-network'] === 'true')
         res.set('Access-Control-Allow-Private-Network', 'true');
+      if (!allowed && req.method !== 'OPTIONS')
+        return res.status(403).json({ error: 'ORIGIN_REJECTED' });
     }
     if (req.method === 'OPTIONS') return res.status(204).end();
     next();
@@ -114,8 +135,10 @@ export function createAgentApp(opts: {
 
   app.get('/agent/status', (_req, res) => {
     res.json({
-      ready: config.blockers.length === 0,
-      blockers: config.blockers,
+      ready: blockers().length === 0,
+      blockers: blockers(),
+      model: { source: modelSource, host: model.modelBaseUrl && new URL(model.modelBaseUrl).host },
+      engine: process.env.ITEROP_MCP_ENGINE === 'live' ? 'live' : 'simulated',
       connectors: [...new Set(connectors.tools.map((t) => t.connector))].map((name) => ({
         name,
         tools: connectors.tools.filter((t) => t.connector === name).length,
@@ -132,10 +155,40 @@ export function createAgentApp(opts: {
     }
   });
 
+  // Model settings: the key is never sent back, only whether one is saved.
+  const settingsView = () => ({
+    modelBaseUrl: model.modelBaseUrl,
+    hasKey: Boolean(model.modelApiKey),
+    source: modelSource,
+  });
+  app.get('/agent/settings', (_req, res) => {
+    res.json(settingsView());
+  });
+  app.put('/agent/settings', express.json({ limit: '8kb' }), async (req, res) => {
+    const parsed = settingsBody.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'INVALID_SETTINGS' });
+    const url = checkModelUrl(parsed.data.modelBaseUrl);
+    if ('error' in url) return res.status(400).json({ error: 'INVALID_SETTINGS', message: url.error });
+    // A saved key only ever goes to the endpoint it was entered for.
+    const key = parsed.data.modelApiKey?.trim();
+    const next: ModelSettings = {
+      modelBaseUrl: url.url,
+      modelApiKey: key || (url.url === model.modelBaseUrl ? model.modelApiKey : undefined),
+    };
+    store.save(next);
+    model = next;
+    modelSource = 'saved';
+    try {
+      res.json({ settings: settingsView(), models: await listModels() });
+    } catch {
+      res.json({ settings: settingsView(), models: [], modelsError: 'MODELS_UNAVAILABLE' });
+    }
+  });
+
   app.post('/agent/chat', express.json({ limit: '2mb' }), async (req, res) => {
     const parsed = chatBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'INVALID_REQUEST' });
-    if (config.blockers.length) return res.status(503).json({ error: 'NOT_CONFIGURED' });
+    if (blockers().length) return res.status(503).json({ error: 'NOT_CONFIGURED' });
     const { model, messages } = parsed.data;
     let models: AgentModel[];
     try {

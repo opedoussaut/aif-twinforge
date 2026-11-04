@@ -2,8 +2,13 @@
  * The few 3DDashboard APIs the widget uses, on the platform's own `widget` object and AMD
  * `require`. Outside the dashboard (npm start) a small stand-in keeps the UI usable.
  */
+const local = new URLSearchParams(window.location.search).get('agent');
 const standalone = {
-  values: { agentUrl: 'http://127.0.0.1:3100', defaultModel: '' },
+  // ?agent=http://127.0.0.1:3199 points the standalone page at another local agent.
+  values: {
+    agentUrl: local && /^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(local) ? local : '',
+    defaultModel: '',
+  },
   events: {},
   addEvent(name, fn) {
     this.events[name] = fn;
