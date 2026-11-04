@@ -104,6 +104,15 @@ export function registerDirectTools(server: McpServer, o: DirectOptions) {
     ? 'Live sandbox ITEROP through the API Gateway; synthetic test processes only.'
     : 'Simulated ITEROP engine; no platform request.';
   const admitted = (key: string) => o.processes.includes(key);
+  // Name the valid keys, so a model that guessed one can correct itself.
+  const notLab = (key: string) =>
+    text(
+      {
+        engine: engineLabel,
+        error: `${key} is not a lab process. Use the exact key of one of these: ${o.processes.join(', ')} (the "key" field of iterop_list_startable_processes).`,
+      },
+      true,
+    );
   const journal = o.journal ?? new RunJournal();
   const link = (key: string | undefined, instanceId?: string | null) =>
     key && instanceId && /^[A-Za-z0-9_.:-]+$/.test(instanceId) && o.play?.[key]
@@ -193,8 +202,7 @@ export function registerDirectTools(server: McpServer, o: DirectOptions) {
     },
     async ({ processKey }) => {
       const d = definition(processKey);
-      if (!d || !admitted(processKey))
-        return text({ engine: engineLabel, error: `${processKey} is not a lab process.` }, true);
+      if (!d || !admitted(processKey)) return notLab(processKey);
       return (
         blocked() ??
         guard(async () => ({
@@ -576,8 +584,7 @@ export function registerDirectTools(server: McpServer, o: DirectOptions) {
     },
     async ({ processKey, values, runReference }) => {
       const d = definition(processKey);
-      if (!d || !admitted(processKey))
-        return text({ engine: engineLabel, error: `${processKey} is not a lab process.` }, true);
+      if (!d || !admitted(processKey)) return notLab(processKey);
       return (
         blocked() ??
         guard(async () => {
