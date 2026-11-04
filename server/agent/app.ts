@@ -168,7 +168,8 @@ export function createAgentApp(opts: {
     const parsed = settingsBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'INVALID_SETTINGS' });
     const url = checkModelUrl(parsed.data.modelBaseUrl);
-    if ('error' in url) return res.status(400).json({ error: 'INVALID_SETTINGS', message: url.error });
+    if ('error' in url)
+      return res.status(400).json({ error: 'INVALID_SETTINGS', message: url.error });
     // A saved key only ever goes to the endpoint it was entered for.
     const key = parsed.data.modelApiKey?.trim();
     const next: ModelSettings = {

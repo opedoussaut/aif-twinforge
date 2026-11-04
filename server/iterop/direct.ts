@@ -202,8 +202,7 @@ export function registerDirectTools(server: McpServer, o: DirectOptions) {
     },
     async ({ processKey }) => {
       const d = definition(processKey);
-      if (!d || !admitted(processKey))
-        return notLab(processKey);
+      if (!d || !admitted(processKey)) return notLab(processKey);
       return (
         blocked() ??
         guard(async () => ({
@@ -585,8 +584,7 @@ export function registerDirectTools(server: McpServer, o: DirectOptions) {
     },
     async ({ processKey, values, runReference }) => {
       const d = definition(processKey);
-      if (!d || !admitted(processKey))
-        return notLab(processKey);
+      if (!d || !admitted(processKey)) return notLab(processKey);
       return (
         blocked() ??
         guard(async () => {

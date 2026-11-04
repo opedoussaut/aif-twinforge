@@ -116,8 +116,8 @@ async function copy(text) {
     <template v-if="mode === 'offline'">
       <h2>Run your own agent</h2>
       <p>
-        The widget talks to an agent on your computer. It uses your model and keeps your keys on
-        your machine. It runs on the <strong>simulated</strong> ITEROP engine.
+        The widget talks to an agent on your computer. It uses your model and your ITEROP settings,
+        and keeps your keys on your machine.
       </p>
       <ol>
         <li>

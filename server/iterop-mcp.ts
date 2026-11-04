@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { definitions } from './iterop/chain';
@@ -7,6 +5,7 @@ import { registerDirectTools } from './iterop/direct';
 import { createLiveEngine, labLiveStatus, loadLabLiveConfig } from './iterop/lab-live';
 import { RunJournal } from './iterop/run-context';
 import { SyntheticEngine } from './iterop/simulator';
+import { useConfigDir } from './config-dir';
 
 /**
  * claude-iterop-orchestrator: a single stdio MCP server that lets a Claude client (Desktop or
@@ -18,8 +17,7 @@ import { SyntheticEngine } from './iterop/simulator';
  *   ITEROP_MCP_REVIEW=step (default) — an expert confirms each stage; final — Claude completes
  *   the automated stages and a person validates the result at the ITEROP sign-off.
  */
-process.chdir(fileURLToPath(new URL('..', import.meta.url)));
-if (existsSync('.env')) process.loadEnvFile('.env');
+useConfigDir();
 
 const review = process.env.ITEROP_MCP_REVIEW === 'final' ? 'final' : 'step';
 // Set together with the guarded Cameo connector; "Update system model" then needs its receipt.

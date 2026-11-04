@@ -45,6 +45,16 @@ Defaults that need no `.env`: models from Ollama (`http://127.0.0.1:11434/v1`), 
 
 Only models listed in `AGENT_FULL_CHAIN_MODELS` may ask for changes; every other model reads only. That list is empty by default, until a model passes the Hall B benchmark.
 
+### Live ITEROP
+
+The agent drives the live sandbox when its settings say so, the same way the Claude Desktop connector does. It reads them from one config folder, which holds `.env` (`ITEROP_MCP_ENGINE=live` and the `NOVA_LAB_*` gateway settings) and `.private/` (the reviewed lab contract, the run journal, the 3D scenes):
+
+- `AIF_CONFIG_DIR`, when set, for example the folder Claude Desktop's connectors already use, so both see the same runs;
+- otherwise `~/.aif-twinforge`, when it holds a `.env`;
+- otherwise the repository.
+
+The widget shows _Live sandbox_ or _Simulated_ next to the status. Every write still waits for approval in the widget, and live mode still needs the reviewed contract. Never commit these files.
+
 ### Developing the widget
 
 1. `npm run agent` from the repository (uses `.env` if present) → `http://127.0.0.1:3100`.

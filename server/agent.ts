@@ -1,16 +1,14 @@
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { createAgentApp } from './agent/app';
 import { loadAgentConfig } from './agent/config';
 import { Connectors } from './agent/connectors';
 import { fileSettingsStore } from './agent/settings';
+import { useConfigDir } from './config-dir';
 
 /**
  * Model-agnostic agent for the 3DDashboard widget: any model behind an OpenAI-compatible
  * endpoint (LiteLLM, Ollama…) drives the same MCP connectors Claude Desktop uses.
  */
-process.chdir(fileURLToPath(new URL('..', import.meta.url)));
-if (existsSync('.env')) process.loadEnvFile('.env');
+const configDir = useConfigDir();
 
 const settings = fileSettingsStore();
 const config = loadAgentConfig(process.env, settings.load());
@@ -22,6 +20,7 @@ app.listen(config.port, '127.0.0.1', () =>
     [
       `aif-twinforge agent running at http://127.0.0.1:${config.port}`,
       `  models: ${config.modelBaseUrl || 'not set'} (${config.modelSource}) · ${connectors.tools.length} tools · ITEROP ${engine}`,
+      `  settings and private files: ${configDir}`,
       ...config.blockers.map((b) => `  BLOCKED: ${b}`),
       '  Open the aif-twinforge widget in your 3DDashboard. Keep this window open; Ctrl+C stops the agent.',
       '',
