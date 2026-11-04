@@ -91,7 +91,7 @@ const answer = (part, approved) =>
   <div ref="surface" class="agent">
     <header class="bar">
       <div class="title">
-        <strong>AI factory agent</strong>
+        <strong>aif-twinforge</strong>
         <span :class="['dot', agent.state]" :title="agent.text"></span>
       </div>
       <label class="model">

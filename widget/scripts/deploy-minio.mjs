@@ -20,7 +20,7 @@ for (const key of ['endPoint', 'accessKey', 'secretKey', 'bucket', 'publicUrl'])
     console.error(`minio.config.json: "${key}" is required.`);
     process.exit(1);
   }
-const prefix = (cfg.prefix ?? 'aif-twinforge-widget').replace(/^\/+|\/+$/g, '');
+const prefix = (cfg.prefix ?? 'aif-twinforge').replace(/^\/+|\/+$/g, '');
 const client = new Client({
   endPoint: cfg.endPoint,
   port: cfg.port,

@@ -5,6 +5,6 @@
   "accessKey": "",
   "secretKey": "",
   "bucket": "widgets",
-  "prefix": "aif-twinforge-widget",
+  "prefix": "aif-twinforge",
   "publicUrl": "https://minio.example.com/widgets"
 }

@@ -1,4 +1,4 @@
-# AI factory agent widget
+# aif-twinforge widget
 
 A 3DDashboard widget where engineers chat with **any model** that drives the aif-twinforge connectors. The model is a commodity: the controls are not in the model.
 
