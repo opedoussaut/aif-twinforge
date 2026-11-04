@@ -135,7 +135,9 @@ const answer = (part, approved) =>
                         'input-available': 'running',
                         'approval-requested': 'waiting for you',
                         'approval-responded': part.approval?.approved ? 'approved' : 'declined',
-                        'output-available': 'done',
+                        'output-available': part.approval?.approved
+                          ? 'done · approved by you'
+                          : 'done',
                         'output-error': 'error',
                         'output-denied': 'refused',
                       }[part.state] ?? part.state)
